@@ -18,6 +18,9 @@ jobs:
     working_directory: ~/repo
 
     steps:
+      - add_ssh_keys:
+          fingerprints:
+            - "b3:32:8a:86:bd:e6:3b:b3:9d:ca:4d:9e:b8:63:98:b9"
       - checkout
 
       # Download and cache dependencies
@@ -44,11 +47,49 @@ jobs:
       # https://pytest.org
       # https://nose.readthedocs.io
       - run:
-          name: run tests
+          name: make html
           command: |
             . venv/bin/activate
             make html
-
+      - persist_to_workspace:
+          root: ~/repo/build/html
+          paths:
+            - ./*
       - store_artifacts:
           path: test-reports
           destination: test-reports
+  deploy:
+    machine: true
+    steps:
+      - add_ssh_keys:
+          fingerprints:
+            - "b3:32:8a:86:bd:e6:3b:b3:9d:ca:4d:9e:b8:63:98:b9"
+      - attach_workspace:
+          at: ~/repo/build/html
+      - run:
+          name: Clone gh-pages
+          command: git clone -b gh-pages git@github.com:mikkame/sphinx-with-markdown-and-transifex.git gh-pages
+      - run:
+          name: Delete exists file
+          command: rm -rf gh-pages/*
+      - run:
+          name: Copy build results
+          command: cp -rf ~/repo/build/html/* gh-pages
+      - run:
+          name: Setup git
+          command: cd gh-pages;git config --local user.name "sphinx builder"; git config --local user.email "sphinxbuilder@example.com"
+      - run:
+          name: Git push
+          command: cd gh-pages; git add ./; git commit -m "From `git log --oneline origin/master -n 1`"; git push
+
+workflows:
+  version: 2
+  build_and_deploy:
+    jobs:
+      - build:
+          filters:
+            branches:
+              only: master
+      - deploy:
+          requires:
+            - build
